@@ -94,6 +94,10 @@ class Action(models.Model):
     swap_card_a = models.IntegerField(null=True)
     swap_card_b = models.IntegerField(null=True)
 
+    @property
+    def swapped_cards(self):
+        return [self.swap_card_a, self.swap_card_b] if self.is_swap() else []
+
     def is_swap(self):
         return self.swap_card_a is not None and self.swap_card_b is not None
 

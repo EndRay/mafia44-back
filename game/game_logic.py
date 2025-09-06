@@ -99,7 +99,8 @@ def try_create_next_state(game: Game) -> None:
     current_state = GameState.objects.get(game=game, stage=game.stage)
     if GameState.objects.filter(game=game, stage=game.stage + 1).exists():
         return
-    if game.stage == GameStage.MILKMAN or (game.stage == GameStage.MILKMAN_COPY and game.copied_role == CardType.MILKMAN):
+    if game.stage == GameStage.MILKMAN or (
+            game.stage == GameStage.MILKMAN_COPY and game.copied_role == CardType.MILKMAN):
         milkman_index = game.roles.index(CardType.MILKMAN.value) \
             if game.stage == GameStage.MILKMAN else game.roles.index(CardType.COPY.value)
         if milkman_index < PLAYERS * CARDS_PER_PLAYER:
@@ -150,9 +151,21 @@ def check_action(game: Game, player_id: int, action: Action) -> bool:
         return False
     if action.swap_card_a is not None and action.swap_card_a == action.swap_card_b:
         return False
-    for idx in action.cards_to_show + [action.swap_card_a or 0, action.swap_card_b or 0]:
+    for idx in action.cards_to_show + action.swapped_cards:
         if not (0 <= idx < PLAYERS * CARDS_PER_PLAYER + CARDS_IN_DISCARD):
             return False
+
+    def is_same_player_card(idx: int) -> bool:
+        return player_id * CARDS_PER_PLAYER <= idx < (player_id + 1) * CARDS_PER_PLAYER
+
+    def is_other_player_card(idx: int) -> bool:
+        return 0 <= idx < PLAYERS * CARDS_PER_PLAYER and not is_same_player_card(idx)
+
+    def is_player_card(idx: int) -> bool:
+        return 0 <= idx < PLAYERS * CARDS_PER_PLAYER
+
+    def is_discard_card(idx: int) -> bool:
+        return not is_player_card(idx)
 
     match GameStage(game.stage):
         case GameStage.BEGINNING | GameStage.SHOOTING | GameStage.FINISHED:
@@ -162,38 +175,38 @@ def check_action(game: Game, player_id: int, action: Action) -> bool:
                     roles[action.cards_to_show[0]] != CardType.COPY.value and
                     not action.is_swap())
         case GameStage.THIEF | GameStage.THIEF_COPY:
+            card_self = CardType.THIEF.value if game.stage == GameStage.THIEF else CardType.COPY.value
+            card_self_id = roles.index(card_self)
             return (len(action.cards_to_show) == 1 and
-                    not player_id * CARDS_PER_PLAYER <= action.cards_to_show[0] < (player_id + 1) * CARDS_PER_PLAYER and
-                    action.cards_to_show[0] < PLAYERS * CARDS_PER_PLAYER and
-                    action.is_swap() and action.cards_to_show[0] in [action.swap_card_a, action.swap_card_b])
+                    is_other_player_card(action.cards_to_show[0]) and
+                    action.is_swap() and
+                    action.cards_to_show[0] in action.swapped_cards and
+                    card_self_id in action.swapped_cards)
         case GameStage.BROTHERS:
             return False
         case GameStage.SEER | GameStage.SEER_COPY:
             card_self = CardType.SEER.value if game.stage == GameStage.SEER else CardType.COPY.value
-            return (((len(action.cards_to_show) == 1 and 0 <= action.cards_to_show[0] < PLAYERS * CARDS_PER_PLAYER) or
-                     (len(action.cards_to_show) == 2 and all(
-                         idx >= PLAYERS * CARDS_PER_PLAYER for idx in action.cards_to_show))) and
+            return (((len(action.cards_to_show) == 1 and is_other_player_card(action.cards_to_show[0])) or
+                     (len(action.cards_to_show) == 2 and
+                      is_discard_card(action.cards_to_show[0]) and
+                      is_discard_card(action.cards_to_show[1]))) and
                     card_self not in [roles[idx] for idx in action.cards_to_show] and
                     not action.is_swap())
         case GameStage.BRAWLER | GameStage.BRAWLER_COPY:
             return (len(action.cards_to_show) == 0 and
                     action.is_swap() and
-                    all(not player_id * CARDS_PER_PLAYER <= idx < (player_id + 1) * CARDS_PER_PLAYER and
-                        idx < PLAYERS * CARDS_PER_PLAYER
-                        for idx in [action.swap_card_a, action.swap_card_b]))
+                    all(is_other_player_card(idx) for idx in action.swapped_cards))
         case GameStage.DRUNKARD | GameStage.DRUNKARD_COPY:
             card_self = CardType.DRUNKARD.value if game.stage == GameStage.DRUNKARD else CardType.COPY.value
             return (len(action.cards_to_show) == 0 and
                     action.is_swap() and
-                    any(idx >= PLAYERS * CARDS_PER_PLAYER for idx in [action.swap_card_a, action.swap_card_b]) and
-                    any(roles[idx] == card_self for idx in [action.swap_card_a, action.swap_card_b]))
+                    any(is_discard_card(idx) for idx in action.swapped_cards) and
+                    any(roles[idx] == card_self for idx in action.swapped_cards))
         case GameStage.WITCH | GameStage.WITCH_COPY:
             return (len(action.cards_to_show) == 0 and
                     action.is_swap() and
-                    any(idx >= PLAYERS * CARDS_PER_PLAYER for idx in [action.swap_card_a, action.swap_card_b]) and
-                    any(idx < PLAYERS * CARDS_PER_PLAYER and
-                        not player_id * CARDS_PER_PLAYER <= idx < (player_id + 1) * CARDS_PER_PLAYER
-                        for idx in [action.swap_card_a, action.swap_card_b]))
+                    any(is_discard_card(idx) for idx in action.swapped_cards) and
+                    any(is_other_player_card(idx) for idx in action.swapped_cards))
         case GameStage.MILKMAN | GameStage.MILKMAN_COPY:
             card_self = CardType.MILKMAN.value if game.stage == GameStage.MILKMAN else CardType.COPY.value
             return (len(action.cards_to_show) == 1 and
