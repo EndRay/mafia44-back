@@ -178,7 +178,8 @@ def check_action(game: Game, player_id: int, action: Action) -> bool:
         case GameStage.BRAWLER | GameStage.BRAWLER_COPY:
             return (len(action.cards_to_show) == 0 and
                     action.is_swap() and
-                    all(not player_id * CARDS_PER_PLAYER <= idx < (player_id + 1) * CARDS_PER_PLAYER
+                    all(not player_id * CARDS_PER_PLAYER <= idx < (player_id + 1) * CARDS_PER_PLAYER and
+                        idx < PLAYERS * CARDS_PER_PLAYER
                         for idx in [action.swap_card_a, action.swap_card_b]))
         case GameStage.DRUNKARD | GameStage.DRUNKARD_COPY:
             card_self = CardType.DRUNKARD.value if game.stage == GameStage.DRUNKARD else CardType.COPY.value
