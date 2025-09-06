@@ -58,11 +58,10 @@ def create_room(request):
 @require_POST
 @csrf_protect
 @smart_view
+@require_room_exists
 def delete_room(request):
     data = json.loads(request.body or "{}")
     room_id = data.get('room_id')
-    if not Room.objects.filter(id=room_id).exists():
-        raise RoomNotFoundException
     room = Room.objects.get(id=room_id)
     if room.creator != request.user:
         raise UserNotCreatorException

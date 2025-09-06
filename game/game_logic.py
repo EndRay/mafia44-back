@@ -127,7 +127,7 @@ def try_create_next_state(game: Game) -> None:
         if game.stage == GameStage.COPY:
             game.copied_role = current_state.cards[current_state.action.cards_to_show[0]]
             game.save()
-        new_game_state = GameState.objects.create(
+        GameState.objects.create(
             game=game,
             stage=game.stage + 1,
             cards=_apply_action(current_state.cards, current_state.action)
@@ -277,12 +277,14 @@ def selected_cards_to_action(game: Game, player_id: int, selected_cards: list[in
 def can_shoot(game: Game, player_id: int, card_id: int) -> bool:
     if not (0 <= card_id < PLAYERS * CARDS_PER_PLAYER):
         return False
-    if CardShot.objects.filter(game=game, shooter_id=player_id).exists():
+    if game.stage != GameStage.SHOOTING:
         return False
     card_player_id = card_id // CARDS_PER_PLAYER
     if card_player_id == player_id:
         return False
-    if game.stage != GameStage.SHOOTING:
+    if CardShot.objects.filter(game=game, shooter_id=player_id).exists():
+        return False
+    if CardShot.objects.filter(game=game, card_index=card_id).exists():
         return False
     return True
 
