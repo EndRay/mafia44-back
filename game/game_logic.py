@@ -162,9 +162,9 @@ def check_action(game: Game, player_id: int, action: Action) -> bool:
                     roles[action.cards_to_show[0]] != CardType.COPY.value and
                     not action.is_swap())
         case GameStage.THIEF | GameStage.THIEF_COPY:
-            card_self = CardType.THIEF.value if game.stage == GameStage.THIEF else CardType.COPY.value
             return (len(action.cards_to_show) == 1 and
-                    roles[action.cards_to_show[0]] != card_self and
+                    not player_id * CARDS_PER_PLAYER <= action.cards_to_show[0] < (player_id + 1) * CARDS_PER_PLAYER and
+                    action.cards_to_show[0] < PLAYERS * CARDS_PER_PLAYER and
                     action.is_swap() and action.cards_to_show[0] in [action.swap_card_a, action.swap_card_b])
         case GameStage.BROTHERS:
             return False
