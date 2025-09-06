@@ -6,6 +6,7 @@ urlpatterns = [
     path('game_stage/', game_views.get_game_stage, name='game_stage'),
     path('game_history/', game_views.get_history, name='game_history'),
     path('submit_action/', game_views.submit_action, name='submit_action'),
+    path('shoot_card/', game_views.shoot_card, name='shoot_card'),
 
     path('rooms/', room_views.get_rooms_list, name='rooms_list'),
     path('create_room/', room_views.create_room, name='create_room'),

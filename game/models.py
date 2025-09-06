@@ -117,6 +117,12 @@ class Action(models.Model):
         ]
 
 
+class CardShot(models.Model):
+    game = models.ForeignKey(Game, related_name='shots', on_delete=models.CASCADE)
+    card_index = models.IntegerField()
+    shooter_id = models.IntegerField()
+
+
 class Player(models.Model):
     user = models.ForeignKey(User, related_name='players', on_delete=models.CASCADE)
     room = models.ForeignKey(Room, related_name='players', on_delete=models.CASCADE)

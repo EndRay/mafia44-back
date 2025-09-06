@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from game.exceptions import InvalidSelectedCardsException
-from game.models import Game, GameState, CardType, GameStageRead, GameStage, Action, Room
+from game.models import Game, GameState, CardType, GameStageRead, GameStage, Action, Room, CardShot
 
 PLAYERS = 4
 CARDS_IN_DISCARD = 3
@@ -61,6 +61,8 @@ def is_action_required(game_state: GameState) -> bool:
         return False
     if stage == GameStage.BROTHERS:
         return False
+    if stage == GameStage.SHOOTING:
+        return False
     if stage in ROLE_TO_STAGE.values():
         stage_to_role = {v.value: k for k, v in ROLE_TO_STAGE.items()}
         return stage_to_role[stage] in roles[:PLAYERS * CARDS_PER_PLAYER]
@@ -71,6 +73,11 @@ def is_action_required(game_state: GameState) -> bool:
 
 def check_advance_stage(game: Game) -> bool:
     if game.stage == GameStage.FINISHED:
+        return False
+
+    if game.stage == GameStage.SHOOTING:
+        if CardShot.objects.filter(game=game).count() >= game.room.players.count():
+            return True
         return False
 
     current_state = GameState.objects.get(game=game, stage=game.stage)
@@ -139,6 +146,7 @@ def get_accessible_stages(game: Game, player_id: int) -> list[GameStage]:
     if CardType.COPY in player_roles and (copied_role := game.copied_role):
         if copied_role in ROLE_COPY_TO_STAGE:
             player_stages.append(ROLE_COPY_TO_STAGE[copied_role])
+    player_stages.append(GameStage.SHOOTING)
     return player_stages
 
 
@@ -264,3 +272,26 @@ def selected_cards_to_action(game: Game, player_id: int, selected_cards: list[in
     if not check_action(game, player_id, action):
         raise InvalidSelectedCardsException
     return action
+
+
+def can_shoot(game: Game, player_id: int, card_id: int) -> bool:
+    if not (0 <= card_id < PLAYERS * CARDS_PER_PLAYER):
+        return False
+    if CardShot.objects.filter(game=game, shooter_id=player_id).exists():
+        return False
+    card_player_id = card_id // CARDS_PER_PLAYER
+    if card_player_id == player_id:
+        return False
+    if game.stage != GameStage.SHOOTING:
+        return False
+    return True
+
+
+def _shoot(game: Game, player_id: int, card_id: int) -> None:
+    CardShot.objects.create(game=game, shooter_id=player_id, card_index=card_id)
+
+
+def try_shoot(game: Game, player_id: int, card_id: int) -> None:
+    if not can_shoot(game, player_id, card_id):
+        raise InvalidSelectedCardsException
+    _shoot(game, player_id, card_id)

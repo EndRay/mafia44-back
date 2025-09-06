@@ -5,10 +5,10 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST, require_GET
 
-from game.exceptions import RoomNotFoundException, GameNotStartedException, UserNotInRoomException
+from game.exceptions import UserNotInRoomException
 from game.game_logic import mark_read_by, check_advance_stage, advance_stage, CARDS_PER_PLAYER, PLAYERS, \
-    get_accessible_stages, selected_cards_to_action, CARDS_IN_DISCARD, try_create_next_state
-from game.models import Room, Action, Game, GameStage, GameState, CardType
+    get_accessible_stages, selected_cards_to_action, try_create_next_state, try_shoot
+from game.models import Room, GameStage, GameState, CardType, CardShot
 from game.view_utils import smart_view, require_room_exists, require_game_started, require_user_in_room
 
 
@@ -55,6 +55,16 @@ def _state_json(game_state: GameState, user: User):
         return {
             "players_to_show": players_to_show
         }
+    if game_state.stage == GameStage.SHOOTING:
+        game = game_state.game
+        result = [None] * PLAYERS
+        for player_id in range(PLAYERS):
+            card_shots = CardShot.objects.filter(game=game, shooter_id=player_id)
+            if card_shots.exists():
+                result[player_id] = card_shots.get().card_index
+        return {
+            "cards_shot": result
+        }
     action = game_state.get_action()
     if not action:
         return None
@@ -100,7 +110,7 @@ def get_history(request):
     else:
         result = {}
         for stage, state_id in game.history.all().order_by('stage').values_list('stage', 'id'):
-            if stage >= GameStage.SHOOTING:
+            if stage >= GameStage.FINISHED:
                 break
             state = GameState.objects.get(id=state_id)
             result[stage] = _state_json(state, room.players.get(user=request.user).user)
@@ -134,3 +144,18 @@ def submit_action(request):
     try_create_next_state(game)
     return JsonResponse({"detail": "Action recorded"}, status=200)
 
+
+@require_POST
+@csrf_protect
+@smart_view
+@require_room_exists
+@require_game_started
+@require_user_in_room
+def shoot_card(request):
+    room_id = json.loads(request.body).get("room_id")
+    card_position = json.loads(request.body).get("card_position")
+    room = Room.objects.get(id=room_id)
+    game = room.game
+    player_id = room.players.get(user=request.user).position
+    try_shoot(game, player_id, card_position)
+    return JsonResponse({"detail": "Shot recorded"}, status=200)
